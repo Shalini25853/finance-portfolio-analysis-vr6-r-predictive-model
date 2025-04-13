@@ -1,0 +1,983 @@
+---
+title: "Group Assignment"
+author: "Your Name"
+date: "2025-02-16"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+##Exploratory Data Analysis
+---
+
+###Import the Libraries
+
+
+```{r load_libraries, include=FALSE}
+
+# Load required libraries
+
+# 'tidyverse' - A collection of R packages for data manipulation and visualization (includes dplyr, ggplot2, etc.)
+library(tidyverse)
+
+# 'lubridate' - Simplifies working with dates and times in R
+library(lubridate)
+
+# 'quantmod' - Used for quantitative financial modeling and retrieving stock data from sources like Yahoo Finance
+library(quantmod)
+
+# 'TTR' - Provides technical trading rules and indicators for financial analysis
+library(TTR)
+
+# 'ggplot2' - A powerful data visualization package for creating elegant plots
+library(ggplot2)
+
+# 'reshape2' - Helps reshape and transform data from wide to long format and vice versa
+library(reshape2)
+
+
+```
+
+---
+
+###Load the Datasets
+
+```{r load_datasets, include=FALSE}
+# ===============================
+# 📌 Load Stock Market Data
+# ===============================
+
+# Define the date range for stock data retrieval
+start_date <- "2013-01-01"  # Start date for data collection
+end_date <- "2024-12-31"    # End date for data collection
+
+# Define the list of stock tickers to be analyzed
+tickers <- c("AMAT", "AMD", "ASML", "AVGO", "INTC", "LRCX", "MU", 
+             "NVDA", "QCOM", "TSM", "SPY", "SMH") 
+
+# 'SPY' represents the S&P 500 ETF, and 'SMH' represents the semiconductor ETF
+# The rest are individual semiconductor-related stocks
+
+# ----------------------------------------
+# Function to Download Stock Data from Yahoo Finance
+# ----------------------------------------
+
+get_stock_data <- function(ticker) {
+  # Retrieve stock data using the quantmod package
+  stock_data <- getSymbols(ticker, src = "yahoo", from = start_date, 
+                           to = end_date, auto.assign = FALSE)
+  
+  # Convert the data to a dataframe
+  df <- data.frame(Date = index(stock_data), coredata(stock_data))
+  
+  # Rename columns to remove the stock ticker prefix
+  colnames(df) <- gsub(paste0(ticker, "."), "", colnames(df))
+  
+  # Add a column to identify the stock ticker
+  df$Stock <- ticker
+  
+  # Return the formatted dataframe
+  return(df)
+}
+
+# ----------------------------------------
+# Retrieve Stock Data for All Tickers
+# ----------------------------------------
+
+# Use 'map_dfr' (from purrr package) to apply the function to each ticker 
+# and combine all stock data into a single dataframe
+all_stocks <- map_dfr(tickers, get_stock_data)
+
+# Ensure the 'Date' column is in the correct date format
+all_stocks$Date <- as.Date(all_stocks$Date)
+
+# The resulting dataframe 'all_stocks' contains stock data for multiple tickers,
+# including Date, Open, High, Low, Close, Volume, and Adjusted Close.
+```
+
+
+
+```{r all_stock_database, include=FALSE}
+
+# =========================================
+# 📌 Calculate Daily Returns for Each Stock
+# =========================================
+
+# Transform the 'all_stocks' dataset to compute daily returns for each stock
+all_stocks <- all_stocks %>%
+  
+  # Group the data by stock ticker to perform calculations within each stock's data
+  group_by(Stock) %>%
+  
+  # Ensure that the data is sorted by date before computing returns
+  arrange(Date) %>%
+  
+  # Compute the daily return as the percentage change in the closing price
+  mutate(DailyReturn = (Close / lag(Close) - 1)) %>%
+  
+  # Ungroup the data after computing the daily return
+  ungroup() %>%
+  
+  # Remove rows with missing daily return values (e.g., the first row for each stock)
+  filter(!is.na(DailyReturn))
+
+# 📝 Explanation:
+# - The lag() function shifts the closing price by one day to calculate the percentage change.
+# - The first row for each stock will have NA in 'DailyReturn' since there's no previous day to compare.
+# - filter(!is.na(DailyReturn)) ensures we only keep valid return values.
+
+```
+
+---
+
+###Summary Statistics
+
+```{r Summary, include=FALSE}
+
+# ============================================
+# 📌 Compute Summary Statistics for Daily Returns
+# ============================================
+
+# Group data by Stock and compute key summary statistics
+summary_stats <- all_stocks %>%
+  group_by(Stock) %>%
+  summarise(
+    
+    # Compute the mean (average) daily return for each stock
+    Mean = mean(DailyReturn, na.rm = TRUE),
+    
+    # Compute the median (middle value) daily return for each stock
+    Median = median(DailyReturn, na.rm = TRUE),
+    
+    # Compute the minimum daily return for each stock (worst loss)
+    Min = min(DailyReturn, na.rm = TRUE),
+    
+    # Compute the maximum daily return for each stock (best gain)
+    Max = max(DailyReturn, na.rm = TRUE),
+    
+    # Compute the standard deviation (volatility) of daily returns
+    SD = sd(DailyReturn, na.rm = TRUE),
+    
+    # Compute skewness (asymmetry of return distribution)
+    Skewness = mean((DailyReturn - mean(DailyReturn, na.rm = TRUE))^3, na.rm = TRUE) / 
+               (sd(DailyReturn, na.rm = TRUE)^3),
+    
+    # Compute kurtosis (tail risk & outlier tendency)
+    Kurtosis = mean((DailyReturn - mean(DailyReturn, na.rm = TRUE))^4, na.rm = TRUE) / 
+               (sd(DailyReturn, na.rm = TRUE)^4)
+  )
+
+# ==============================================
+# 🖥️ Display the Summary Statistics Table
+# ==============================================
+print(summary_stats)
+
+# 📝 Explanation:
+# - The summary table provides insights into the central tendency (mean, median), 
+#   dispersion (SD), and distribution shape (skewness, kurtosis) of each stock's returns.
+# - A high standard deviation (SD) indicates high volatility.
+# - Positive skewness means returns have a right tail (occasional large gains).
+# - High kurtosis (>3) suggests extreme movements (outliers) in returns.
+
+```
+
+---
+
+###Missing and Null Values
+
+```{r Missing values, include=FALSE}
+
+# ================================
+# 🔍 Check for Missing and NaN Values
+# ================================
+
+# Count the number of missing (NA) values in each column
+missing_values <- colSums(is.na(all_stocks))
+missing_values  # Display missing values per column
+
+# Count the number of NaN (Not-a-Number) values in the 'DailyReturn' column
+nan_values <- sum(is.nan(all_stocks$DailyReturn))
+nan_values  # Display count of NaN values
+
+```
+
+---
+
+###Box Plot to check Outliers
+
+```{r Box plot Outliers, include=FALSE}
+
+# ================================
+# 📊 Box Plot for Outlier Detection
+# ================================
+
+# This box plot visualizes the distribution of daily returns for each stock.
+# It helps in identifying outliers (marked in red) that might indicate extreme price movements.
+
+ggplot(all_stocks, aes(x = reorder(Stock, -DailyReturn, median), y = DailyReturn, fill = Stock)) +
+  geom_boxplot(outlier.color = "red", outlier.shape = 16, outlier.size = 2, alpha = 0.6) +  # Box plot with outlier highlighting
+  theme_minimal() +
+  ggtitle("Box Plot of Daily Returns for Each Stock") +  # Plot title
+  xlab("Stock") + 
+  ylab("Daily Return") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate x-axis labels for better readability
+  coord_flip()  # Flip for better visualization
+
+```
+
+##Portfolio Analysis
+
+```{r setup_portfolio, echo=TRUE, message=FALSE, warning=FALSE}
+
+# =====================================
+# 🎯 Portfolio Setup and Return Calculation
+# =====================================
+
+# Define portfolio weights for VR6 (custom semiconductor stock portfolio)
+portfolio_weights <- tibble(
+  Stock = c("AMAT", "AMD", "ASML", "AVGO", "INTC", "LRCX", "MU", "NVDA", "QCOM", "TSM"),
+  Weight = c(0.068566, 0.053614, 0.067451, 0.104102, 0.068772, 0.112993, 0.088126, 0.135466, 0.261599, 0.039310)
+)
+
+# Merge portfolio weights into stock data
+all_stocks <- all_stocks %>%
+  left_join(portfolio_weights, by = "Stock")
+
+# Verify that the weight column has been successfully merged
+print(head(all_stocks))  # Ensure the 'Weight' column exists
+
+# Filter data for analysis from 2017 onward
+all_stocks <- all_stocks %>% filter(Date >= as.Date("2017-01-01"))
+
+# ===========================
+# 📊 Compute VR6 Portfolio Returns
+# ===========================
+
+portfolio_returns <- all_stocks %>%
+  filter(!is.na(Weight)) %>%  # Exclude stocks without assigned portfolio weights
+  group_by(Date) %>%
+  summarise(vr6 = sum(DailyReturn * Weight, na.rm = TRUE), .groups = 'drop')
+
+# ==============================
+# 📈 Load SMH and SPY as Benchmarks
+# ==============================
+
+benchmark_returns <- all_stocks %>%
+  filter(Stock %in% c("SMH", "SPY")) %>%
+  select(Date, Stock, DailyReturn) %>%
+  spread(Stock, DailyReturn)  # Reshape data to have separate SPY and SMH columns
+
+# Merge Portfolio Returns with Benchmark Returns
+final_returns <- left_join(portfolio_returns, benchmark_returns, by = "Date")
+
+# Verify final dataset contains VR6, SPY, and SMH returns
+print(head(final_returns))  # Ensure all necessary return columns are included
+
+```
+
+---
+
+###Yearly Returns (2017-2024)
+
+```{r yearly_returns, echo=TRUE}
+# =====================================
+# 📊 Compute Yearly Returns (2017-2024)
+# =====================================
+
+yearly_returns <- final_returns %>%
+  mutate(Year = year(Date)) %>%  # Extract year from Date
+  group_by(Year) %>%  # Group by year
+  summarise(
+    VR6_Return = prod(1 + vr6, na.rm = TRUE) - 1,  # VR6 portfolio yearly return
+    SPY_Return = prod(1 + SPY, na.rm = TRUE) - 1,  # SPY yearly return
+    SMH_Return = prod(1 + SMH, na.rm = TRUE) - 1   # SMH yearly return
+  )
+
+# Display yearly returns for analysis
+print(yearly_returns)
+
+```
+
+---
+
+###Risk Analysis (Standard Deviation)
+
+```{r risk_analysis, echo=TRUE}
+# =====================================
+# 📊 Compute Yearly Standard Deviation (Volatility)
+# =====================================
+
+risk_analysis <- final_returns %>%
+  mutate(Year = year(Date)) %>%  # Extract year from Date
+  group_by(Year) %>%  # Group by year
+  summarise(
+    VR6_StdDev = sd(vr6, na.rm = TRUE),  # Compute standard deviation (volatility) for VR6 portfolio
+    SPY_StdDev = sd(SPY, na.rm = TRUE),  # Compute standard deviation (volatility) for SPY (S&P 500 ETF)
+    SMH_StdDev = sd(SMH, na.rm = TRUE)   # Compute standard deviation (volatility) for SMH (Semiconductor ETF)
+  )
+
+# Display standard deviations for risk analysis
+print(risk_analysis)
+
+```
+
+---
+
+###Sharpe, Sortino, and Treynor Ratios
+
+```{r ratios, echo=TRUE}
+# =====================================
+# 📊 Compute Sharpe, Sortino, and Treynor Ratios
+# =====================================
+
+# Define the risk-free rate (Assume 2% annual rate, converted to daily)
+risk_free_rate <- 0.02 / 252  
+
+# ---------------------------------
+# Function to compute downside deviation for Sortino Ratio
+# ---------------------------------
+downside_deviation <- function(returns, risk_free_rate) {
+  downside_returns <- returns[returns < risk_free_rate]  # Filter negative returns
+  return(sd(downside_returns, na.rm = TRUE))  # Compute standard deviation of negative returns
+}
+
+# ---------------------------------
+# Compute Key Performance Ratios
+# ---------------------------------
+ratios <- final_returns %>%
+  summarise(
+    # Sharpe Ratio = (Mean Return - Risk-Free Rate) / Standard Deviation
+    VR6_Sharpe = (mean(vr6, na.rm = TRUE) - risk_free_rate) / sd(vr6, na.rm = TRUE),
+    SPY_Sharpe = (mean(SPY, na.rm = TRUE) - risk_free_rate) / sd(SPY, na.rm = TRUE),
+    SMH_Sharpe = (mean(SMH, na.rm = TRUE) - risk_free_rate) / sd(SMH, na.rm = TRUE),
+
+    # Sortino Ratio = (Mean Return - Risk-Free Rate) / Downside Deviation
+    VR6_Sortino = (mean(vr6, na.rm = TRUE) - risk_free_rate) / downside_deviation(vr6, risk_free_rate),
+    SPY_Sortino = (mean(SPY, na.rm = TRUE) - risk_free_rate) / downside_deviation(SPY, risk_free_rate),
+    SMH_Sortino = (mean(SMH, na.rm = TRUE) - risk_free_rate) / downside_deviation(SMH, risk_free_rate),
+
+    # Treynor Ratio = (Mean Return - Risk-Free Rate) / Beta (Covariance with Market)
+    VR6_Treynor = (mean(vr6, na.rm = TRUE) - risk_free_rate) / cov(vr6, SPY, use = "complete.obs"),
+    SPY_Treynor = (mean(SPY, na.rm = TRUE) - risk_free_rate) / cov(SPY, SPY, use = "complete.obs"),
+    SMH_Treynor = (mean(SMH, na.rm = TRUE) - risk_free_rate) / cov(SMH, SPY, use = "complete.obs")
+  )
+
+# =====================================
+# 🖥️ Display Computed Ratios
+# =====================================
+print(ratios)
+
+
+```
+
+
+---
+
+###Alpha & Beta Calculation
+
+```{r alpha_beta, echo=TRUE}
+
+# =====================================
+# 📊 Compute Alpha & Beta using CAPM
+# =====================================
+
+# Compute market variance using SPY (benchmark)
+market_variance_spy <- var(final_returns$SPY, na.rm = TRUE)  
+
+# ---------------------------------
+# Compute Beta Values (Market Sensitivity)
+# ---------------------------------
+beta_values <- final_returns %>%
+  summarise(
+    # Beta = Covariance between asset and market / Variance of market returns
+    VR6_Beta = cov(vr6, SPY, use = "complete.obs") / market_variance_spy,
+    SMH_Beta = cov(SMH, SPY, use = "complete.obs") / market_variance_spy
+  )
+
+# ---------------------------------
+# Compute Alpha using the CAPM Formula
+# ---------------------------------
+# Capital Asset Pricing Model (CAPM): α = Actual Return - Expected Return
+# Expected Return = Risk-Free Rate + Beta * (Market Return - Risk-Free Rate)
+
+# Compute mean returns for each asset
+mean_vr6 <- mean(final_returns$vr6, na.rm = TRUE)  # Mean return for VR6 Portfolio
+mean_smh <- mean(final_returns$SMH, na.rm = TRUE)  # Mean return for SMH ETF
+mean_spy <- mean(final_returns$SPY, na.rm = TRUE)  # Mean return for SPY (benchmark)
+
+# Compute Alpha for VR6 and SMH using SPY as the benchmark
+alpha_values <- beta_values %>%
+  mutate(
+    VR6_Alpha = mean_vr6 - (risk_free_rate + VR6_Beta * (mean_spy - risk_free_rate)),
+    SMH_Alpha = mean_smh - (risk_free_rate + SMH_Beta * (mean_spy - risk_free_rate))
+  )
+
+# =====================================
+# 🖥️ Display Computed Alpha & Beta Values
+# =====================================
+print(alpha_values)
+
+```
+
+## Charts and Graphics 
+
+###Cumulative Growth Comparison: VR6 vs SPY vs SMH ###
+
+```{r cumulative_growth_comparison, echo=TRUE, message=FALSE, warning=FALSE}
+# ==========================================
+# 📊 Compute Cumulative Growth Over Time
+# ==========================================
+
+# Arrange data chronologically to ensure correct cumulative calculations
+final_returns <- final_returns %>%
+  arrange(Date) %>%
+  mutate(
+    # Compute cumulative growth for each asset
+    vr6_Growth = cumprod(1 + vr6),  # VR6 Portfolio Growth
+    SPY_Growth = cumprod(1 + SPY),  # SPY ETF Growth (Market Benchmark)
+    SMH_Growth = cumprod(1 + SMH)   # SMH ETF Growth (Semiconductor Sector)
+  )
+
+# ----------------------------------
+# Convert Data to Long Format for ggplot
+# ----------------------------------
+growth_data <- final_returns %>%
+  select(Date, vr6_Growth, SPY_Growth, SMH_Growth) %>%
+  pivot_longer(cols = -Date, names_to = "Asset", values_to = "Growth")
+
+# ==========================================
+# 📈 Plot Cumulative Growth Comparison
+# ==========================================
+ggplot(growth_data, aes(x = Date, y = Growth, color = Asset)) +
+  geom_line(size = 1.2) +  # Line plot for cumulative growth trends
+  ggtitle("Cumulative Growth Comparison: VR6 vs SPY vs SMH") +
+  xlab("Date") + 
+  ylab("Cumulative Growth (Starting at 1.0)") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red", "green"))  # Custom color scheme for clarity
+
+
+```
+
+
+---
+
+###Yearly Returns Comparison: VR6 vs SPY vs SMH
+
+```{r yearly_returns_comparison, echo=TRUE, message=FALSE, warning=FALSE}
+# ==========================================
+# 📊 Compute Yearly Returns (2017-2024)
+# ==========================================
+
+yearly_returns <- final_returns %>%
+  mutate(Year = lubridate::year(Date)) %>%  # Extract the year from the date column
+  group_by(Year) %>%  # Group data by year to compute yearly returns
+  summarise(
+    # Compute the yearly return for each asset
+    VR6 = prod(1 + vr6, na.rm = TRUE) - 1,  # VR6 Portfolio Yearly Return
+    SPY = prod(1 + SPY, na.rm = TRUE) - 1,  # SPY ETF Yearly Return (Market Benchmark)
+    SMH = prod(1 + SMH, na.rm = TRUE) - 1   # SMH ETF Yearly Return (Semiconductor Sector)
+  ) %>%
+  pivot_longer(cols = c(VR6, SPY, SMH), names_to = "Asset", values_to = "Yearly_Return")  
+  # Convert data to long format for easy visualization
+
+# ==========================================
+# 📈 Plot Yearly Returns Comparison
+# ==========================================
+
+ggplot(yearly_returns, aes(x = Year, y = Yearly_Return, fill = Asset)) +
+  geom_bar(stat = "identity", position = "dodge") +  # Create a bar plot for yearly returns
+  ggtitle("Yearly Returns Comparison: VR6 vs SPY vs SMH") +  # Set plot title
+  xlab("Year") +  # Label for the x-axis
+  ylab("Yearly Return") +  # Label for the y-axis
+  theme_minimal() +  # Use a clean minimal theme
+  scale_fill_manual(values = c("blue", "red", "green"))  # Assign colors to each asset
+
+
+```
+
+
+---
+
+###Risk Comparison: Rolling Standard Deviation (Volatility)
+
+```{r rolling_risk_comparison, echo=TRUE, message=FALSE, warning=FALSE}
+# ==========================================
+# 📊 Compute Rolling 30-Day Volatility (Standard Deviation)
+# ==========================================
+
+final_returns <- final_returns %>%
+  mutate(
+    # Compute rolling standard deviation (volatility) for each asset over 30-day periods
+    vr6_vol = runSD(vr6, n = 30, sample = FALSE),  # VR6 Portfolio Volatility
+    SPY_vol = runSD(SPY, n = 30, sample = FALSE),  # SPY ETF Volatility (Market Benchmark)
+    SMH_vol = runSD(SMH, n = 30, sample = FALSE)   # SMH ETF Volatility (Semiconductor Industry)
+  )
+
+# ==========================================
+# 📈 Plot Rolling Volatility (30-day Moving Standard Deviation)
+# ==========================================
+
+ggplot(final_returns, aes(x = Date)) +
+  geom_line(aes(y = vr6_vol, color = "VR6 Volatility"), size = 1) +  # Line for VR6 Portfolio
+  geom_line(aes(y = SPY_vol, color = "SPY Volatility"), size = 1) +  # Line for SPY ETF
+  geom_line(aes(y = SMH_vol, color = "SMH Volatility"), size = 1) +  # Line for SMH ETF
+  ggtitle("Rolling 30-Day Volatility: VR6 vs SPY vs SMH") +  # Set plot title
+  xlab("Date") +  # Label for the x-axis
+  ylab("Volatility (Standard Deviation)") +  # Label for the y-axis
+  theme_minimal() +  # Use a clean minimal theme
+  scale_color_manual(values = c("blue", "red", "green"))  # Assign colors to each asset
+
+
+```
+
+
+
+---
+
+###Correlation Heatmap of VR6, SPY, and SMH
+
+```{r correlation_heatmap_chart, echo=TRUE, message=FALSE, warning=FALSE}
+# =====================================================
+# 📊 Compute and Visualize Correlation Heatmap of VR6, SPY, and SMH
+# =====================================================
+
+# Compute the correlation matrix for VR6 Portfolio, SPY, and SMH
+corr_matrix <- cor(final_returns[, -1], use = "complete.obs")
+
+# Convert the correlation matrix into a long format for visualization using ggplot2
+corr_melted <- reshape2::melt(corr_matrix)
+
+# =====================================================
+# 📈 Plot Correlation Heatmap
+# =====================================================
+
+ggplot(corr_melted, aes(Var1, Var2, fill = value)) +
+  geom_tile() +  # Create a heatmap using colored tiles
+  geom_text(aes(label = round(value, 2)), color = "white") +  # Display correlation values on tiles
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +  # Define color scale
+  ggtitle("Correlation Heatmap of VR6, SPY, and SMH") +  # Set plot title
+  theme_minimal()  # Apply a clean, minimal theme
+
+
+
+```
+
+
+---
+##Machine Learning Model: Linear Regression Model##
+
+```{r prepare_lr_data, message=FALSE, warning=FALSE}
+# ============================================
+# 📌 Prepare Data for Linear Regression Model
+# ============================================
+
+# Ensure the dataset is sorted by date before feature engineering
+final_returns <- final_returns %>%
+  arrange(Date) 
+
+# =====================================================
+# 🎯 Create Lagged Features (Predictive Inputs)
+# =====================================================
+
+# Generate lagged features for SPY and SMH (1-day lag)
+# These will serve as predictors for the VR6 portfolio price
+final_returns <- final_returns %>%
+  mutate(
+    SPY_lag1 = lag(SPY, 1),  # Previous day's SPY return
+    SMH_lag1 = lag(SMH, 1),  # Previous day's SMH return
+    VR6_next = lead(vr6, 1)  # Target variable (Next day VR6 return)
+  ) %>%
+  drop_na()  # Remove rows with missing values due to lagging
+
+# =====================================================
+# 📊 Train-Test Split (80% Training, 20% Testing)
+# =====================================================
+
+set.seed(123)  # Set seed for reproducibility
+
+# Randomly sample 80% of the data for training
+train_index <- sample(1:nrow(final_returns), size = 0.8 * nrow(final_returns))
+
+# Split the dataset into training and testing sets
+train_data <- final_returns[train_index, ]  # Training set (80%)
+test_data <- final_returns[-train_index, ]  # Testing set (20%)
+
+# 📝 Explanation:
+# - **Lagged variables (SPY_lag1, SMH_lag1) serve as predictors** because stock prices are influenced by past market trends.
+# - **VR6_next is the target variable**, representing the next day's portfolio return.
+# - **Train-test split ensures** the model is trained on one portion of the data and evaluated on unseen data.
+
+
+```
+
+
+---
+
+###Linear Regression Model Training
+
+```{r train_lr_model, message=FALSE, warning=FALSE}
+# ============================================
+# 📌 Train a Basic Linear Regression Model
+# ============================================
+
+# Define the linear regression model
+# VR6_next (next-day portfolio return) is predicted based on SPY and SMH lagged values
+lin_reg_model <- lm(VR6_next ~ SPY_lag1 + SMH_lag1, data = train_data)
+
+# ============================================
+# 📊 Display Model Summary
+# ============================================
+
+# Print model summary to understand regression coefficients and performance metrics
+summary(lin_reg_model)
+
+# 📝 Explanation:
+# - The **Intercept** represents the baseline return when all predictors are zero.
+# - The **SPY_lag1 coefficient** shows how much the VR6 portfolio changes per unit change in SPY's previous return.
+# - The **SMH_lag1 coefficient** indicates how much VR6 changes based on SMH's previous return.
+# - The **R-squared** value measures how well the model explains the variance in VR6 returns.
+
+
+```
+
+
+
+---
+
+###Model Performance Evaluation
+
+```{r evaluate_lr_model, message=FALSE, warning=FALSE}
+# ============================================
+# 📌 Evaluate the Linear Regression Model
+# ============================================
+
+# Generate predictions on the test dataset
+lin_reg_preds <- predict(lin_reg_model, test_data)
+
+# ============================================
+# 📊 Compute Performance Metrics
+# ============================================
+
+# Root Mean Squared Error (RMSE) - Measures average prediction error
+rmse <- sqrt(mean((lin_reg_preds - test_data$VR6_next)^2))
+
+# R-Squared - Proportion of variance explained by the model
+r_squared <- summary(lin_reg_model)$r.squared
+
+# Adjusted R-Squared - Accounts for the number of predictors used
+adj_r_squared <- summary(lin_reg_model)$adj.r.squared
+
+# Print the performance metrics
+print(paste("Linear Regression RMSE:", round(rmse, 5)))
+print(paste("R-squared:", round(r_squared, 5)))
+print(paste("Adjusted R-squared:", round(adj_r_squared, 5)))
+
+# ============================================
+# 📊 Plot Actual vs Predicted VR6 Portfolio Prices
+# ============================================
+
+ggplot(data = test_data, aes(x = VR6_next, y = lin_reg_preds)) +
+  geom_point(color = "blue", alpha = 0.6) +  # Scatter plot of actual vs predicted values
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +  # Ideal prediction line (y = x)
+  ggtitle("Actual vs Predicted VR6 Portfolio Price") +
+  xlab("Actual VR6 Price") + ylab("Predicted VR6 Price") +
+  theme_minimal()
+
+# 📝 Explanation:
+# - **RMSE** represents the average prediction error; lower values indicate better performance.
+# - **R-squared** shows how much of the variance in VR6 is explained by the model.
+# - **Adjusted R-squared** adjusts for the number of predictors to prevent overfitting.
+# - The **scatter plot compares actual vs predicted values** to visualize model accuracy.
+
+```
+---
+
+###Enhancing the Linear regression Model
+
+```{r feature_engineering, message=FALSE, warning=FALSE}
+# ============================================
+# 📌 Feature Engineering for Linear Regression Model
+# ============================================
+
+# Load TTR library for moving averages and technical indicators
+library(TTR)  
+
+# Ensure data is sorted by date to maintain time sequence
+final_returns <- final_returns %>%
+  arrange(Date)
+
+# ============================================
+# 📊 Compute Moving Averages (7-day and 30-day)
+# ============================================
+# Moving averages smooth out short-term fluctuations and highlight trends
+
+final_returns <- final_returns %>%
+  mutate(
+    SPY_MA7 = SMA(SPY, n = 7),    # 7-day moving average for SPY
+    SPY_MA30 = SMA(SPY, n = 30),  # 30-day moving average for SPY
+    SMH_MA7 = SMA(SMH, n = 7),    # 7-day moving average for SMH
+    SMH_MA30 = SMA(SMH, n = 30)   # 30-day moving average for SMH
+  )
+
+# ============================================
+# 📊 Compute Volatility (Rolling Standard Deviation)
+# ============================================
+# Rolling standard deviation measures risk and helps in predicting fluctuations
+
+final_returns <- final_returns %>%
+  mutate(
+    SPY_Vol7 = runSD(SPY, n = 7, sample = FALSE),    # 7-day volatility for SPY
+    SPY_Vol30 = runSD(SPY, n = 30, sample = FALSE),  # 30-day volatility for SPY
+    SMH_Vol7 = runSD(SMH, n = 7, sample = FALSE),    # 7-day volatility for SMH
+    SMH_Vol30 = runSD(SMH, n = 30, sample = FALSE)   # 30-day volatility for SMH
+  )
+
+# ============================================
+# 🔄 Create Lagged Features (1-day Lag)
+# ============================================
+# Lagging features help capture past trends as input for prediction models
+
+final_returns <- final_returns %>%
+  mutate(
+    SPY_lag1 = lag(SPY, 1),    # Previous day's SPY value
+    SMH_lag1 = lag(SMH, 1),    # Previous day's SMH value
+    VR6_next = lead(vr6, 1)    # Target variable (Next day VR6 price)
+  ) %>%
+  drop_na()  # Remove NA values from lagged calculations
+
+# ============================================
+# 📊 Train-Test Split (80% Training, 20% Testing)
+# ============================================
+# Split data into training (80%) and testing (20%) sets for model evaluation
+
+set.seed(123)  # Set seed for reproducibility
+train_index <- sample(1:nrow(final_returns), size = 0.8 * nrow(final_returns))  # Select random indices for training data
+train_data <- final_returns[train_index, ]  # Training dataset
+test_data <- final_returns[-train_index, ]  # Testing dataset
+
+# 📝 Explanation:
+# - **Moving Averages (7-day, 30-day)** identify long and short-term trends.
+# - **Rolling Standard Deviation (Volatility)** measures market risk.
+# - **Lagged Features** include past values of SPY and SMH for predicting VR6.
+# - **Train-Test Split** ensures the model is trained on historical data and tested on unseen data.
+
+
+
+```
+
+---
+
+###Train the Enhanced Multiple Linear Regression Model
+
+```{r train_enhanced_lr_model, message=FALSE, warning=FALSE}
+
+# ========================================================
+# 📌 Enhanced Linear Regression Model with Feature Selection
+# ========================================================
+
+# Train a multiple linear regression model using engineered features
+enhanced_lr_model <- lm(VR6_next ~ SPY_lag1 + SMH_lag1 + SPY_MA7 + SPY_MA30 + 
+                         SMH_MA7 + SMH_MA30 + SPY_Vol7 + SPY_Vol30 + 
+                         SMH_Vol7 + SMH_Vol30, data = train_data)
+
+# Display model summary to assess initial feature significance
+summary(enhanced_lr_model)
+
+# ========================================================
+# 📌 Stepwise Feature Selection (Optimize Model)
+# ========================================================
+# Stepwise regression automatically removes insignificant features, improving model efficiency
+
+# Load the MASS library for AIC-based model selection
+library(MASS)
+
+# Apply stepwise selection (both forward and backward) to improve model performance
+optimized_model <- stepAIC(enhanced_lr_model, direction = "both")
+
+# Display optimized model summary after feature selection
+summary(optimized_model)
+
+# 📝 Explanation:
+# - The **enhanced_lr_model** initially includes all moving averages, volatility, and lagged variables.
+# - **Stepwise AIC optimization** removes features that don't contribute significantly to prediction.
+# - **AIC (Akaike Information Criterion)** helps select the best model with fewer irrelevant variables.
+# - The optimized model ensures a better trade-off between accuracy and complexity.
+
+
+
+```
+
+
+
+---
+
+###Cross-Validation for Model Stability
+
+```{r cross_validation, message=FALSE, warning=FALSE}
+
+# ==========================================================
+# 📌 Cross-Validation for Model Performance Assessment
+# ==========================================================
+
+# Load the boot library for cross-validation
+library(boot)
+
+# Define a function to compute cross-validation RMSE
+cv_error <- function(data, indices) {
+  # Create training and testing subsets for each CV iteration
+  train_data <- data[indices, ]
+  test_data <- data[-indices, ]
+  
+  # Train a multiple linear regression model with selected features
+  model <- lm(VR6_next ~ SPY_lag1 + SMH_lag1 + SPY_MA7 + SPY_MA30 + 
+               SMH_MA7 + SMH_MA30 + SPY_Vol7 + SPY_Vol30 + 
+               SMH_Vol7 + SMH_Vol30, data = train_data)
+  
+  # Predict on the test set
+  predictions <- predict(model, test_data)
+  
+  # Compute RMSE (Root Mean Squared Error) as the evaluation metric
+  return(sqrt(mean((predictions - test_data$VR6_next)^2)))
+}
+
+# ==========================================================
+# 📌 10-Fold Cross-Validation Execution
+# ==========================================================
+
+# Set a random seed for reproducibility
+set.seed(123)
+
+# Perform 10-fold cross-validation using the boot package
+cv_results <- boot(data = train_data, statistic = cv_error, R = 10)
+
+# Print the average RMSE from the cross-validation runs
+print(paste("10-Fold CV RMSE:", round(mean(cv_results$t), 5)))
+
+# 📝 Explanation:
+# - **Cross-validation (CV)** helps assess model performance across different data splits.
+# - **10-fold CV** means the dataset is split into 10 subsets, training on 9 and testing on 1 each time.
+# - **RMSE (Root Mean Squared Error)** is used to measure prediction accuracy.
+# - The final printed RMSE represents the **average error** across all 10 iterations.
+
+
+
+```
+
+
+---
+
+###Model Performance & Residual Diagnostics
+
+```{r evaluate_enhanced_lr_model, message=FALSE, warning=FALSE}
+
+# ==========================================================
+# 📌 Evaluate the Enhanced Linear Regression Model
+# ==========================================================
+
+# Predict VR6 prices on the test data using the optimized model
+enhanced_preds <- predict(optimized_model, test_data)
+
+# ==========================================================
+# 📌 Compute Model Performance Metrics
+# ==========================================================
+
+# Compute Root Mean Squared Error (RMSE) - Measures prediction accuracy
+rmse <- sqrt(mean((enhanced_preds - test_data$VR6_next)^2))
+
+# Compute R-squared - Measures how well independent variables explain variation
+r_squared <- summary(optimized_model)$r.squared
+
+# Compute Adjusted R-squared - Adjusts R² for the number of predictors
+adj_r_squared <- summary(optimized_model)$adj.r.squared
+
+# Compute AIC (Akaike Information Criterion) - Penalizes model complexity
+aic_value <- AIC(optimized_model)
+
+# Compute BIC (Bayesian Information Criterion) - Another penalty-based metric
+bic_value <- BIC(optimized_model)
+
+# ==========================================================
+# 📌 Display Model Evaluation Metrics
+# ==========================================================
+
+print(paste("Enhanced Linear Regression RMSE:", round(rmse, 5)))  # Lower is better
+print(paste("R-squared:", round(r_squared, 5)))  # Closer to 1 is better
+print(paste("Adjusted R-squared:", round(adj_r_squared, 5)))  # Accounts for added variables
+print(paste("AIC Value:", round(aic_value, 2)))  # Lower is better
+print(paste("BIC Value:", round(bic_value, 2)))  # Lower is better
+
+# ==========================================================
+# 📌 Residuals Plot for Model Diagnostics
+# ==========================================================
+
+# Set up a 2x2 plot layout for diagnostic plots
+par(mfrow=c(2,2))
+
+# Generate standard diagnostic plots for the model:
+# 1. Residuals vs Fitted: Checks for patterns in residuals (should be random)
+# 2. Normal Q-Q Plot: Checks if residuals follow a normal distribution
+# 3. Scale-Location: Identifies heteroskedasticity (variance issues)
+# 4. Residuals vs Leverage: Detects influential outliers
+
+plot(optimized_model)
+
+# 📝 Explanation:
+# - RMSE indicates **prediction error** (lower RMSE means better fit).
+# - R² and Adjusted R² show **how well the model explains price variation**.
+# - AIC & BIC help determine **model efficiency**, penalizing unnecessary complexity.
+# - Residual plots help **diagnose potential model issues**, ensuring no systematic bias.
+
+
+
+```
+
+
+---
+
+###Visualizing Actual vs Predicted VR6 Portfolio Price
+
+```{r plot_actual_vs_predicted, message=FALSE, warning=FALSE}
+# ==========================================================
+# 📌 Plot Actual vs Predicted VR6 Portfolio Prices
+# ==========================================================
+
+ggplot(data = test_data, aes(x = VR6_next, y = enhanced_preds)) +
+  
+  # Scatter plot of actual vs predicted values
+  geom_point(color = "blue", alpha = 0.6) +
+  
+  # Reference line (y = x) to indicate perfect predictions
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  
+  # Add title and axis labels
+  ggtitle("Actual vs Predicted VR6 Portfolio Price (Enhanced Model)") +
+  xlab("Actual VR6 Price") + 
+  ylab("Predicted VR6 Price") +
+  
+  # Apply minimalistic theme for better visualization
+  theme_minimal()
+
+# ==========================================================
+# 📝 Explanation:
+# - The **scatter plot** compares actual vs predicted prices.
+# - The **red dashed line** (y = x) represents perfect predictions.
+# - If points are close to the red line, the model's predictions are accurate.
+# - Large deviations indicate **systematic errors or underfitting/overfitting**.
+
+```
+
+
+
