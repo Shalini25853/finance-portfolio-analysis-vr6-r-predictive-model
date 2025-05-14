@@ -1,12 +1,12 @@
 # finance-portfolio-analysis-vr6-r-predictive-model
 R-based financial analysis and multiple linear regression model to forecast the performance of a semiconductor-focused portfolio, benchmarked against SPY and SMH indices.
-# 💹 VR6 Portfolio Forecasting & Benchmark Analysis (R)
+# VR6 Portfolio Forecasting & Benchmark Analysis (R)
 
 This project analyzes the performance of the **VR6 semiconductor portfolio** using **multiple linear regression** and benchmarking against **SPY** and **SMH** indices. It evaluates financial ratios, risk metrics, and predictive accuracy to inform investment decisions.
 
 ---
 
-## 🎯 Objective
+##  Objective
 
 To forecast the future performance of a sector-focused investment portfolio and:
 - Compare VR6 to broad market and sector ETFs
@@ -15,7 +15,7 @@ To forecast the future performance of a sector-focused investment portfolio and:
 
 ---
 
-## ⚙️ Tools & Techniques
+##  Tools & Techniques
 
 - **R Programming**
 - `quantmod`, `ggplot2`, `dplyr`, `tidyquant`
@@ -26,7 +26,7 @@ To forecast the future performance of a sector-focused investment portfolio and:
 
 ---
 
-## 📊 Key Analysis Components
+##  Key Analysis Components
 
 - Downloaded daily stock price data for VR6 stocks (2013–2024)
 - Benchmarked performance against SPY and SMH
@@ -39,7 +39,7 @@ To forecast the future performance of a sector-focused investment portfolio and:
 
 ---
 
-## 🔍 Key Insights
+##  Key Insights
 
 - VR6 portfolio shows **higher return** but also **higher volatility**
 - Regression model performance improved with added technical indicators
@@ -48,14 +48,14 @@ To forecast the future performance of a sector-focused investment portfolio and:
 
 ---
 
-## 📁 Files Included
+##  Files Included
 
 - `Group Assignment Report-1.pdf` – Report with detailed findings
 - `Group Assignmnet-1.Rmd` – Annotated RMarkdown source code
 
 ---
 
-## 📌 Business Value
+##  Business Value
 
 This project demonstrates how **predictive modeling in R** can:
 - Enhance portfolio visibility
@@ -64,7 +64,7 @@ This project demonstrates how **predictive modeling in R** can:
 
 ---
 
-## 🏷️ Tags
+## Tags
 
 `#finance` `#portfolio-analysis` `#r-programming`  
 `#predictive-modeling` `#regression` `#risk-analysis` `#semiconductors`
